@@ -1,0 +1,857 @@
+<script>
+  const state = {
+    data: null,
+    currentSection: 'inicio',
+    selectedActivityId: '',
+    toastTimer: null
+  };
+
+  document.addEventListener('DOMContentLoaded', function () {
+    bindInterface();
+    loadDashboard();
+  });
+
+  function bindInterface() {
+    document.addEventListener('click', handleGlobalClick);
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') closeAllModals();
+    });
+
+    document.getElementById('activity-form').addEventListener('submit', submitActivity);
+    document.getElementById('member-form').addEventListener('submit', submitMember);
+    document.getElementById('deliverable-form').addEventListener('submit', submitDeliverable);
+    document.getElementById('contribution-form').addEventListener('submit', submitContribution);
+    document.getElementById('evidence-form').addEventListener('submit', submitEvidence);
+    document.getElementById('observation-form').addEventListener('submit', submitObservation);
+    document.getElementById('review-observation-form').addEventListener('submit', submitObservationReview);
+    document.getElementById('reassign-form').addEventListener('submit', submitReassignment);
+    document.getElementById('split-form').addEventListener('submit', submitSplit);
+    document.getElementById('deadline-form').addEventListener('submit', submitDeadline);
+    document.getElementById('evidence-type').addEventListener('change', updateEvidenceFields);
+    document.getElementById('results-activity-select').addEventListener('change', renderResults);
+    document.getElementById('contribution-type').addEventListener('change', updateValuationPreview);
+    document.getElementById('contribution-scope').addEventListener('change', updateValuationPreview);
+    document.getElementById('contribution-complexity').addEventListener('change', updateValuationPreview);
+    document.getElementById('new-activity-button').addEventListener('click', openActivityModal);
+    document.getElementById('new-member-button').addEventListener('click', function () {
+      openMemberModal();
+    });
+  }
+
+  function handleGlobalClick(event) {
+    const sectionButton = event.target.closest('[data-section]');
+    if (sectionButton) {
+      event.preventDefault();
+      navigate(sectionButton.dataset.section);
+      return;
+    }
+
+    if (event.target.closest('[data-close-modal]')) {
+      closeAllModals();
+      return;
+    }
+
+    const backdrop = event.target.closest('.modal-backdrop');
+    if (backdrop && event.target === backdrop) {
+      closeAllModals();
+      return;
+    }
+
+    if (event.target.closest('[data-new-activity]')) {
+      openActivityModal();
+      return;
+    }
+
+    const activityButton = event.target.closest('[data-open-activity]');
+    if (activityButton) {
+      openActivityDetail(activityButton.dataset.openActivity);
+      return;
+    }
+
+    const editMemberButton = event.target.closest('[data-edit-member]');
+    if (editMemberButton) {
+      const member = findById(state.data.members, editMemberButton.dataset.editMember);
+      openMemberModal(member);
+      return;
+    }
+
+    const deliverableButton = event.target.closest('[data-new-deliverable]');
+    if (deliverableButton) {
+      openDeliverableModal(deliverableButton.dataset.newDeliverable);
+      return;
+    }
+
+    const contributionButton = event.target.closest('[data-new-contribution]');
+    if (contributionButton) {
+      openContributionModal(contributionButton.dataset.newContribution);
+      return;
+    }
+
+    const evidenceButton = event.target.closest('[data-submit-evidence]');
+    if (evidenceButton) {
+      openEvidenceModal(evidenceButton.dataset.submitEvidence);
+      return;
+    }
+
+    const observationButton = event.target.closest('[data-report-observation]');
+    if (observationButton) {
+      openObservationModal(observationButton.dataset.reportObservation);
+      return;
+    }
+
+    const reviewButton = event.target.closest('[data-review-observation]');
+    if (reviewButton) {
+      openObservationReviewModal(reviewButton.dataset.reviewObservation);
+      return;
+    }
+
+    const reassignButton = event.target.closest('[data-reassign]');
+    if (reassignButton) {
+      openReassignModal(reassignButton.dataset.reassign);
+      return;
+    }
+
+    const splitButton = event.target.closest('[data-split]');
+    if (splitButton) {
+      openSplitModal(splitButton.dataset.split);
+      return;
+    }
+
+    const deadlineButton = event.target.closest('[data-change-deadline]');
+    if (deadlineButton) {
+      openDeadlineModal(deadlineButton.dataset.changeDeadline);
+    }
+  }
+
+  function loadDashboard() {
+    runServer('apiGetBootstrap').then(renderApp).catch(renderFatalError);
+  }
+
+  function renderApp(data) {
+    state.data = data;
+    hide('loading-view');
+    hide('global-message');
+
+    if (data.needsSetup) {
+      show('setup-view');
+      renderAnonymousChip('Configuración pendiente');
+      return;
+    }
+
+    hide('setup-view');
+    renderUser(data.user);
+    renderSummary(data.summary);
+    renderDashboardActivities(data.activities || []);
+    renderDashboardContributions(data.myContributions || []);
+    renderActivitiesGrid(data.activities || []);
+    renderMembers(data.members || []);
+    populateContributionOptions();
+    renderResultsOptions();
+    renderAdminVisibility();
+
+    if (state.selectedActivityId && !findById(data.activities, state.selectedActivityId)) {
+      state.selectedActivityId = '';
+      state.currentSection = 'actividades';
+    }
+    navigate(state.currentSection, true);
+  }
+
+  function renderAdminVisibility() {
+    document.querySelectorAll('.admin-only').forEach(function (element) {
+      element.classList.toggle('is-hidden', !state.data.user.isAdmin);
+    });
+  }
+
+  function navigate(section, preserveScroll) {
+    if (!state.data || state.data.needsSetup) return;
+    if (section === 'equipo' && !state.data.user.isAdmin) section = 'inicio';
+
+    state.currentSection = section;
+    document.querySelectorAll('.app-view').forEach(function (view) {
+      view.classList.add('is-hidden');
+    });
+
+    const viewMap = {
+      inicio: 'dashboard-view',
+      actividades: 'activities-view',
+      detalle: 'activity-detail-view',
+      resultados: 'results-view',
+      equipo: 'team-view'
+    };
+    show(viewMap[section] || 'dashboard-view');
+
+    const activeNav = section === 'detalle' ? 'actividades' : section;
+    document.querySelectorAll('.nav-item').forEach(function (item) {
+      item.classList.toggle('is-active', item.dataset.section === activeNav);
+    });
+
+    const titles = {
+      inicio: 'Tu aporte, claro y demostrable',
+      actividades: 'Actividades del equipo',
+      detalle: 'Detalle de actividad',
+      resultados: 'Resultados de participación',
+      equipo: 'Integrantes y permisos'
+    };
+    document.getElementById('page-title').textContent = titles[section] || titles.inicio;
+    if (section === 'detalle') renderActivityDetail();
+    if (section === 'resultados') renderResults();
+    if (!preserveScroll) window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function openActivityDetail(activityId) {
+    state.selectedActivityId = activityId;
+    navigate('detalle');
+  }
+
+  function renderUser(user) {
+    const chip = document.getElementById('user-chip');
+    chip.classList.remove('is-loading');
+    chip.innerHTML = '<span class="avatar">' + escapeHtml(initials(user.name)) + '</span>' +
+      '<span class="user-copy"><strong>' + escapeHtml(user.name) + '</strong><small>' + escapeHtml(user.role) + '</small></span>';
+    document.getElementById('welcome-title').textContent = greeting() + ', ' + firstName(user.name);
+  }
+
+  function renderAnonymousChip(message) {
+    document.getElementById('user-chip').innerHTML = '<span class="avatar">A</span><span class="user-copy"><strong>Aporta</strong><small>' + escapeHtml(message) + '</small></span>';
+  }
+
+  function renderSummary(summary) {
+    setText('open-activities-count', summary.openActivities || 0);
+    setText('pending-count', summary.pendingContributions || 0);
+    setText('delivered-count', summary.deliveredContributions || 0);
+    const pending = Number(summary.pendingContributions || 0);
+    setText('welcome-copy', pending
+      ? 'Tienes ' + pending + ' ' + pluralize(pending, 'contribución pendiente', 'contribuciones pendientes') + ' por registrar.'
+      : 'No tienes contribuciones pendientes. Cuando recibas una responsabilidad aparecerá aquí.');
+  }
+
+  function renderDashboardActivities(activities) {
+    const container = document.getElementById('activities-list');
+    if (!activities.length) {
+      container.innerHTML = '<div class="empty-inline">Aún no hay actividades. Crea la primera para distribuir responsabilidades.</div>';
+      return;
+    }
+    container.innerHTML = activities.slice(0, 5).map(function (activity) {
+      return '<button class="list-item list-button" type="button" data-open-activity="' + escapeHtml(activity.id) + '">' +
+        '<span><strong>' + escapeHtml(activity.nombre) + '</strong><small>' + escapeHtml(activity.id) + ' · Cierre ' + formatDate(activity.fecha_limite) + '</small></span>' +
+        statusBadge(activity.estado) + '</button>';
+    }).join('');
+  }
+
+  function renderDashboardContributions(contributions) {
+    const container = document.getElementById('contributions-list');
+    if (!contributions.length) {
+      container.innerHTML = '<div class="empty-inline">Tus próximas contribuciones aparecerán aquí con su valor y fecha límite.</div>';
+      return;
+    }
+    container.innerHTML = contributions.slice(0, 5).map(function (item) {
+      const canSubmit = item.actividad_estado === 'Pendiente';
+      return '<article class="contribution-mini"><div><strong>' + escapeHtml(item.descripcion) + '</strong>' +
+        '<small>' + escapeHtml(item.actividad_nombre) + ' · ' + item.valor_calculado + ' puntos</small></div>' +
+        (canSubmit ? '<button class="compact-button" type="button" data-submit-evidence="' + escapeHtml(item.id) + '">Entregar</button>' : statusBadge(item.estado)) + '</article>';
+    }).join('');
+  }
+
+  function renderActivitiesGrid(activities) {
+    const container = document.getElementById('activities-grid');
+    if (!activities.length) {
+      container.innerHTML = '<div class="empty-stage compact-stage"><span class="empty-number">01</span><h2>Crea la primera actividad</h2><p>Después podrás añadir entregables y distribuir contribuciones.</p></div>';
+      return;
+    }
+    container.innerHTML = activities.map(function (activity) {
+      return '<article class="activity-card"><div class="activity-card-top">' + statusBadge(activity.estado) + '<span>' + escapeHtml(activity.id) + '</span></div>' +
+        '<h3>' + escapeHtml(activity.nombre) + '</h3><p>' + escapeHtml(activity.descripcion || 'Sin descripción adicional.') + '</p>' +
+        '<div class="activity-stats"><span><strong>' + activity.deliverableCount + '</strong> entregables</span><span><strong>' + activity.contributionCount + '</strong> contribuciones</span></div>' +
+        '<div class="activity-footer"><small>Cierra ' + formatDate(activity.fecha_limite) + '</small><button class="text-button" type="button" data-open-activity="' + escapeHtml(activity.id) + '">Abrir →</button></div></article>';
+    }).join('');
+  }
+
+  function renderActivityDetail() {
+    const activity = findById(state.data.activities, state.selectedActivityId);
+    if (!activity) {
+      navigate('actividades');
+      return;
+    }
+    const open = activity.estado === 'Pendiente';
+    const deliverables = state.data.deliverables.filter(function (item) { return item.actividad_id === activity.id; });
+    const contributions = state.data.contributions.filter(function (item) { return item.actividad_id === activity.id; });
+    let adminActions = '';
+    if (state.data.user.isAdmin) {
+      adminActions = '<div class="detail-actions">' +
+        '<button class="secondary-light-button" type="button" data-change-deadline="' + activity.id + '">' + (open ? 'Cambiar plazo' : 'Reabrir') + '</button>' +
+        (open ? '<button class="secondary-light-button" type="button" data-new-deliverable="' + activity.id + '">Agregar entregable</button><button class="primary-button" type="button" data-new-contribution="' + activity.id + '">Asignar contribución</button>' : '') +
+        '</div>';
+    }
+
+    const deliverableHtml = deliverables.length ? deliverables.map(function (item) {
+      return '<article class="deliverable-card"><span class="type-chip">' + escapeHtml(item.tipo) + '</span><h4>' + escapeHtml(item.nombre) + '</h4><p>' + escapeHtml(item.descripcion || 'Sin descripción.') + '</p>' +
+        (item.enlace ? '<a href="' + escapeHtml(item.enlace) + '" target="_blank" rel="noopener">Abrir entregable</a>' : '<small>Sin enlace principal</small>') + '</article>';
+    }).join('') : '<div class="empty-inline">Esta actividad no tiene entregables. Las contribuciones pueden registrarse igualmente.</div>';
+
+    const contributionHtml = contributions.length ? contributions.map(function (item) {
+      const canSubmit = open && (item.responsable_id === state.data.user.id || state.data.user.isAdmin);
+      const evidence = state.data.evidences.filter(function (entry) { return entry.contributionId === item.id; });
+      const observations = state.data.observations.filter(function (entry) { return entry.contributionId === item.id; });
+      const hasOpenObservation = observations.some(function (entry) { return entry.status === 'Reportada' || entry.status === 'Confirmada'; });
+      const canObserve = open && item.estado === 'Entregado' && item.responsable_id !== state.data.user.id && !hasOpenObservation;
+      const evidenceLinks = evidence.length ? '<div class="evidence-links">' + evidence.map(function (entry) {
+        return entry.url
+          ? '<a href="' + escapeHtml(entry.url) + '" target="_blank" rel="noopener">' + escapeHtml(entry.type) + '</a>'
+          : '<span>' + escapeHtml(entry.type) + '</span>';
+      }).join('') + '</div>' : '';
+      const observationHtml = observations.length ? '<div class="observation-stack">' + observations.map(function (observation) {
+        const reviewAction = state.data.user.isAdmin && observation.status === 'Reportada'
+          ? '<button class="compact-button" type="button" data-review-observation="' + escapeHtml(observation.id) + '">Revisar</button>'
+          : '';
+        return '<div class="observation-item"><div><span class="observation-meta">' + escapeHtml(observation.creatorName) + ' · ' + escapeHtml(observation.status) + '</span><p>' + escapeHtml(observation.reason) + '</p></div>' + reviewAction + '</div>';
+      }).join('') + '</div>' : '';
+      const managementActions = [];
+      if (canSubmit) managementActions.push('<button class="compact-button" type="button" data-submit-evidence="' + escapeHtml(item.id) + '">Registrar evidencia</button>');
+      if (canObserve) managementActions.push('<button class="compact-button warning-button" type="button" data-report-observation="' + escapeHtml(item.id) + '">Observar</button>');
+      if (state.data.user.isAdmin && open && item.estado === 'Pendiente' && !item.evidenceCount && !hasOpenObservation) {
+        managementActions.push('<button class="compact-button" type="button" data-reassign="' + escapeHtml(item.id) + '">Reasignar</button>');
+      }
+      if (state.data.user.isAdmin && open && !hasOpenObservation) {
+        managementActions.push('<button class="compact-button" type="button" data-split="' + escapeHtml(item.id) + '">Dividir</button>');
+      }
+      const adjustedValue = Number(item.valor_bruto || item.valor_calculado) !== Number(item.valor_calculado)
+        ? '<small>Valor proporcional de una división; cálculo bruto ' + item.valor_bruto + '</small>'
+        : '<small>Base ' + item.valor_base + ' + alcance ' + item.alcance_nivel + ' + complejidad ' + item.complejidad_nivel + '</small>';
+      return '<article class="contribution-card"><div class="contribution-main"><div class="contribution-title"><span>' + escapeHtml(item.id) + '</span>' + statusBadge(item.estado) + '</div>' +
+        '<h4>' + escapeHtml(item.descripcion) + '</h4><p>' + escapeHtml(item.tipo) + ' · Responsable: ' + escapeHtml(item.responsable_nombre) + '</p>' +
+        '<div class="valuation-line"><strong>' + item.valor_calculado + ' puntos</strong>' + adjustedValue + '</div>' + evidenceLinks + observationHtml + '</div>' +
+        (managementActions.length ? '<div class="card-actions">' + managementActions.join('') + '</div>' : '') + '</article>';
+    }).join('') : '<div class="empty-inline">Todavía no hay contribuciones asignadas.</div>';
+
+    const relatedIds = [activity.id].concat(deliverables.map(function (item) { return item.id; }), contributions.map(function (item) { return item.id; }));
+    const history = state.data.history.filter(function (item) { return relatedIds.indexOf(item.entityId) >= 0; }).slice(0, 12);
+    const historyHtml = history.length ? history.map(function (item) {
+      return '<li><span class="timeline-dot"></span><div><strong>' + historyActionLabel(item.action) + '</strong><p>' + escapeHtml(item.userName) + ' · ' + formatDate(item.date) + '</p></div></li>';
+    }).join('') : '<li class="empty-inline">Todavía no hay movimientos registrados.</li>';
+
+    document.getElementById('activity-detail-content').innerHTML = '<section class="detail-hero"><div><div class="detail-kicker">' + statusBadge(activity.estado) + '<span>' + escapeHtml(activity.id) + '</span></div><h2>' + escapeHtml(activity.nombre) + '</h2><p>' + escapeHtml(activity.descripcion || 'Sin descripción adicional.') + '</p><small>Fecha límite: ' + formatDate(activity.fecha_limite) + '</small></div>' + adminActions + '</section>' +
+      '<div class="detail-grid"><section class="panel"><div class="panel-heading"><div><p class="eyebrow">Productos</p><h3>Entregables</h3></div><span class="count-chip">' + deliverables.length + '</span></div><div class="card-stack">' + deliverableHtml + '</div></section>' +
+      '<section class="panel wide-panel"><div class="panel-heading"><div><p class="eyebrow">Responsabilidades</p><h3>Contribuciones</h3></div><span class="count-chip">' + contributions.length + '</span></div><div class="card-stack">' + contributionHtml + '</div></section></div>' +
+      '<section class="panel history-panel"><div class="panel-heading"><div><p class="eyebrow">Trazabilidad</p><h3>Historial reciente</h3></div></div><ol class="timeline">' + historyHtml + '</ol></section>';
+  }
+
+  function renderMembers(members) {
+    const body = document.getElementById('members-table-body');
+    body.innerHTML = members.map(function (member) {
+      return '<tr><td><div class="member-cell"><span class="avatar small-avatar">' + escapeHtml(initials(member.name)) + '</span><span><strong>' + escapeHtml(member.name) + '</strong><small>' + escapeHtml(member.email) + '</small></span></div></td>' +
+        '<td>' + escapeHtml(member.role) + '</td><td>' + statusBadge(member.active ? 'Activo' : 'Inactivo') + '</td>' +
+        '<td><button class="compact-button" type="button" data-edit-member="' + escapeHtml(member.id) + '">Editar</button></td></tr>';
+    }).join('');
+  }
+
+  function renderResultsOptions() {
+    const select = document.getElementById('results-activity-select');
+    const previous = select.value;
+    select.innerHTML = state.data.activities.map(function (activity) {
+      return '<option value="' + escapeHtml(activity.id) + '">' + escapeHtml(activity.nombre) + '</option>';
+    }).join('');
+    if (previous && findById(state.data.activities, previous)) select.value = previous;
+    renderResults();
+  }
+
+  function renderResults() {
+    if (!state.data) return;
+    const select = document.getElementById('results-activity-select');
+    const container = document.getElementById('results-content');
+    if (!state.data.activities.length) {
+      container.innerHTML = '<div class="empty-stage compact-stage"><span class="empty-number">%</span><h2>Aún no hay resultados</h2><p>Crea una actividad y asigna contribuciones para comenzar.</p></div>';
+      return;
+    }
+
+    const activityId = select.value || state.data.activities[0].id;
+    if (!select.value) select.value = activityId;
+    const resultSet = (state.data.resultSets || []).find(function (item) { return item.activityId === activityId; });
+    if (!resultSet || !resultSet.rows.length) {
+      container.innerHTML = '<div class="empty-stage compact-stage"><span class="empty-number">%</span><h2>Sin contribuciones calculables</h2><p>Los porcentajes aparecerán cuando se asignen responsabilidades a esta actividad.</p></div>';
+      return;
+    }
+
+    const statusText = resultSet.final
+      ? 'Resultado final · cierre ' + formatDate(resultSet.closedAt) + ' · versión ' + resultSet.version
+      : 'Resultado provisional · cambiará con nuevas entregas';
+    const cards = resultSet.rows.map(function (row) {
+      return '<article class="result-card"><div class="result-person"><span class="avatar">' + escapeHtml(initials(row.memberName)) + '</span><div><h3>' + escapeHtml(row.memberName) + '</h3><small>' + row.effectiveValue + ' de ' + row.assignedValue + ' puntos efectivos</small></div></div>' +
+        '<div class="result-percentages"><div><strong>' + formatPercentage(row.individualPercentage) + '</strong><span>Participación individual</span></div><div><strong>' + formatPercentage(row.relativePercentage) + '</strong><span>Participación relativa</span></div></div>' +
+        '<div class="progress-track"><span style="width:' + clampPercentage(row.individualPercentage) + '%"></span></div></article>';
+    }).join('');
+    const relativeTotal = resultSet.rows.reduce(function (sum, row) { return sum + Number(row.relativePercentage || 0); }, 0);
+
+    container.innerHTML = '<div class="result-banner ' + (resultSet.final ? 'final-result' : '') + '"><span>' + escapeHtml(statusText) + '</span><button class="text-button" type="button" data-open-activity="' + escapeHtml(activityId) + '">Ver actividad</button></div>' +
+      '<div class="result-cards">' + cards + '</div>' +
+      '<div class="result-explanation"><div><strong>Individual</strong><p>Trabajo efectivo de la persona ÷ responsabilidad final asignada.</p></div><div><strong>Relativa</strong><p>Trabajo efectivo de la persona ÷ trabajo efectivo del equipo. Total: ' + (relativeTotal ? relativeTotal.toFixed(2) + '%' : 'no calculable') + '.</p></div></div>';
+  }
+
+  function populateContributionOptions() {
+    const rules = state.data.valuationRules || [];
+    document.getElementById('contribution-type').innerHTML = rules.map(function (rule) {
+      return '<option value="' + escapeHtml(rule.type) + '">' + escapeHtml(rule.type) + ' · base ' + rule.base + '</option>';
+    }).join('');
+    document.getElementById('contribution-responsible').innerHTML = state.data.members.filter(function (member) {
+      return member.active;
+    }).map(function (member) {
+      return '<option value="' + escapeHtml(member.id) + '">' + escapeHtml(member.name) + '</option>';
+    }).join('');
+    updateValuationPreview();
+  }
+
+  function openActivityModal() {
+    const form = document.getElementById('activity-form');
+    form.reset();
+    const suggested = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    suggested.setMinutes(0, 0, 0);
+    form.elements.deadline.value = toLocalInputValue(suggested);
+    openModal('activity-modal', form.elements.name);
+  }
+
+  function openMemberModal(member) {
+    const form = document.getElementById('member-form');
+    form.reset();
+    form.elements.id.value = member ? member.id : '';
+    form.elements.name.value = member ? member.name : '';
+    form.elements.email.value = member ? member.email : '';
+    form.elements.role.value = member ? member.role : 'Integrante';
+    form.elements.active.checked = member ? member.active : true;
+    setText('member-modal-title', member ? 'Editar integrante' : 'Agregar integrante');
+    openModal('member-modal', form.elements.name);
+  }
+
+  function openDeliverableModal(activityId) {
+    const form = document.getElementById('deliverable-form');
+    form.reset();
+    form.elements.activityId.value = activityId;
+    openModal('deliverable-modal', form.elements.name);
+  }
+
+  function openContributionModal(activityId) {
+    const form = document.getElementById('contribution-form');
+    form.reset();
+    form.elements.activityId.value = activityId;
+    form.elements.scopeLevel.value = '1';
+    form.elements.complexityLevel.value = '1';
+    const deliverables = state.data.deliverables.filter(function (item) { return item.actividad_id === activityId; });
+    document.getElementById('contribution-deliverable').innerHTML = '<option value="">Sin entregable</option>' + deliverables.map(function (item) {
+      return '<option value="' + escapeHtml(item.id) + '">' + escapeHtml(item.nombre) + '</option>';
+    }).join('');
+    updateValuationPreview();
+    openModal('contribution-modal', form.elements.description);
+  }
+
+  function openEvidenceModal(contributionId) {
+    const contribution = findById(state.data.contributions, contributionId);
+    if (!contribution) return;
+    const form = document.getElementById('evidence-form');
+    form.reset();
+    form.elements.contributionId.value = contributionId;
+    document.getElementById('evidence-contribution-summary').innerHTML = '<strong>' + escapeHtml(contribution.descripcion) + '</strong><small>' + escapeHtml(contribution.actividad_nombre) + ' · ' + contribution.valor_calculado + ' puntos</small>';
+    updateEvidenceFields();
+    openModal('evidence-modal', form.elements.type);
+  }
+
+  function openObservationModal(contributionId) {
+    const contribution = findById(state.data.contributions, contributionId);
+    if (!contribution) return;
+    const form = document.getElementById('observation-form');
+    form.reset();
+    form.elements.contributionId.value = contributionId;
+    document.getElementById('observation-summary').innerHTML = '<strong>' + escapeHtml(contribution.descripcion) + '</strong><small>Responsable: ' + escapeHtml(contribution.responsable_nombre) + '</small>';
+    openModal('observation-modal', form.elements.reason);
+  }
+
+  function openObservationReviewModal(observationId) {
+    const observation = findById(state.data.observations, observationId);
+    if (!observation) return;
+    const form = document.getElementById('review-observation-form');
+    form.reset();
+    form.elements.observationId.value = observationId;
+    document.getElementById('review-observation-summary').innerHTML = '<strong>' + escapeHtml(observation.creatorName) + '</strong><small>' + escapeHtml(observation.reason) + '</small>';
+    openModal('review-observation-modal', form.elements.decision);
+  }
+
+  function openReassignModal(contributionId) {
+    const contribution = findById(state.data.contributions, contributionId);
+    if (!contribution) return;
+    const form = document.getElementById('reassign-form');
+    form.reset();
+    form.elements.contributionId.value = contributionId;
+    document.getElementById('reassign-summary').innerHTML = '<strong>' + escapeHtml(contribution.descripcion) + '</strong><small>Responsable actual: ' + escapeHtml(contribution.responsable_nombre) + '</small>';
+    document.getElementById('reassign-responsible').innerHTML = activeMemberOptions(contribution.responsable_id);
+    openModal('reassign-modal', form.elements.responsibleId);
+  }
+
+  function openSplitModal(contributionId) {
+    const contribution = findById(state.data.contributions, contributionId);
+    if (!contribution) return;
+    const form = document.getElementById('split-form');
+    form.reset();
+    form.elements.contributionId.value = contributionId;
+    form.elements.part1Description.value = contribution.descripcion + ' — parte realizada';
+    form.elements.part2Description.value = contribution.descripcion + ' — parte restante';
+    document.getElementById('split-summary').innerHTML = '<strong>' + escapeHtml(contribution.descripcion) + '</strong><small>Valor total que se conservará: ' + contribution.valor_calculado + ' puntos</small>';
+
+    const memberOptions = activeMemberOptions('');
+    document.getElementById('split-part1-responsible').innerHTML = memberOptions;
+    document.getElementById('split-part2-responsible').innerHTML = memberOptions;
+    form.elements.part1ResponsibleId.value = contribution.responsable_id;
+    const alternative = state.data.members.find(function (member) { return member.active && member.id !== contribution.responsable_id; });
+    form.elements.part2ResponsibleId.value = alternative ? alternative.id : contribution.responsable_id;
+
+    const typeOptions = valuationTypeOptions();
+    document.getElementById('split-part1-type').innerHTML = typeOptions;
+    document.getElementById('split-part2-type').innerHTML = typeOptions;
+    form.elements.part1Type.value = contribution.tipo;
+    form.elements.part2Type.value = contribution.tipo;
+    form.elements.part1Detail.value = contribution.alcance_detalle || 'Parte concreta del trabajo original';
+    form.elements.part2Detail.value = 'Trabajo restante claramente delimitado';
+    openModal('split-modal', form.elements.part1Description);
+  }
+
+  function openDeadlineModal(activityId) {
+    const activity = findById(state.data.activities, activityId);
+    if (!activity) return;
+    const form = document.getElementById('deadline-form');
+    form.reset();
+    form.elements.activityId.value = activityId;
+    const currentDeadline = new Date(activity.fecha_limite);
+    const suggested = currentDeadline.getTime() > Date.now()
+      ? currentDeadline
+      : new Date(Date.now() + 24 * 60 * 60 * 1000);
+    form.elements.deadline.value = toLocalInputValue(suggested);
+    setText('deadline-modal-title', activity.estado === 'Culminada' ? 'Reabrir actividad' : 'Cambiar fecha límite');
+    openModal('deadline-modal', form.elements.deadline);
+  }
+
+  function activeMemberOptions(excludedId) {
+    return state.data.members.filter(function (member) {
+      return member.active && member.id !== excludedId;
+    }).map(function (member) {
+      return '<option value="' + escapeHtml(member.id) + '">' + escapeHtml(member.name) + '</option>';
+    }).join('');
+  }
+
+  function valuationTypeOptions() {
+    return (state.data.valuationRules || []).map(function (rule) {
+      return '<option value="' + escapeHtml(rule.type) + '">' + escapeHtml(rule.type) + '</option>';
+    }).join('');
+  }
+
+  function updateValuationPreview() {
+    if (!state.data) return;
+    const type = document.getElementById('contribution-type').value;
+    const rule = (state.data.valuationRules || []).find(function (item) { return item.type === type; });
+    if (!rule) {
+      document.getElementById('valuation-preview').textContent = 'Selecciona un tipo para calcular su valor.';
+      return;
+    }
+    const scope = Number(document.getElementById('contribution-scope').value || 0);
+    const complexity = Number(document.getElementById('contribution-complexity').value || 0);
+    const value = Math.min(10, Number(rule.base) + scope + complexity);
+    document.getElementById('valuation-preview').innerHTML = '<span>Valor automático</span><strong>' + value + ' puntos</strong><small>' + rule.base + ' base + ' + scope + ' alcance + ' + complexity + ' complejidad</small>';
+  }
+
+  function updateEvidenceFields() {
+    const type = document.getElementById('evidence-type').value;
+    document.getElementById('evidence-file-field').classList.toggle('is-hidden', type !== 'Archivo');
+    document.getElementById('evidence-url-field').classList.toggle('is-hidden', type !== 'Enlace');
+  }
+
+  function submitActivity(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const deadline = form.elements.deadline.value;
+    submitMutation(form, 'save-activity', 'apiCreateActivity', {
+      name: form.elements.name.value,
+      description: form.elements.description.value,
+      deadline: deadline ? new Date(deadline).toISOString() : ''
+    }, 'Actividad creada correctamente.');
+  }
+
+  function submitMember(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    submitMutation(form, 'save-member', 'apiSaveMember', {
+      id: form.elements.id.value,
+      name: form.elements.name.value,
+      email: form.elements.email.value,
+      role: form.elements.role.value,
+      active: form.elements.active.checked
+    }, 'Integrante guardado correctamente.');
+  }
+
+  function submitDeliverable(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    submitMutation(form, 'save-deliverable', 'apiCreateDeliverable', {
+      activityId: form.elements.activityId.value,
+      name: form.elements.name.value,
+      type: form.elements.type.value,
+      description: form.elements.description.value,
+      link: form.elements.link.value
+    }, 'Entregable creado correctamente.');
+  }
+
+  function submitContribution(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    submitMutation(form, 'save-contribution', 'apiCreateContribution', {
+      activityId: form.elements.activityId.value,
+      description: form.elements.description.value,
+      responsibleId: form.elements.responsibleId.value,
+      deliverableId: form.elements.deliverableId.value,
+      type: form.elements.type.value,
+      scopeLevel: Number(form.elements.scopeLevel.value),
+      complexityLevel: Number(form.elements.complexityLevel.value),
+      scopeDetail: form.elements.scopeDetail.value,
+      complexityDetail: form.elements.complexityDetail.value
+    }, 'Contribución asignada correctamente.');
+  }
+
+  async function submitEvidence(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const button = document.getElementById('save-evidence');
+    const type = form.elements.type.value;
+    const file = form.elements.file.files[0];
+
+    try {
+      if (type === 'Archivo' && !file) throw new Error('Selecciona un archivo.');
+      if (file && file.size > 5 * 1024 * 1024) throw new Error('El archivo supera el límite de 5 MB.');
+      setBusy(button, true, 'Registrando…');
+      const filePayload = file ? await readFilePayload(file) : null;
+      const data = await runServer('apiSubmitEvidence', {
+        contributionId: form.elements.contributionId.value,
+        type: type,
+        url: form.elements.url.value,
+        description: form.elements.description.value,
+        file: filePayload
+      });
+      closeAllModals();
+      renderApp(data);
+      showToast('Evidencia registrada correctamente.');
+    } catch (error) {
+      showToast(readError(error));
+    } finally {
+      setBusy(button, false, 'Registrar entrega');
+    }
+  }
+
+  function submitObservation(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    submitMutation(form, 'save-observation', 'apiReportObservation', {
+      contributionId: form.elements.contributionId.value,
+      reason: form.elements.reason.value
+    }, 'Observación enviada para revisión.');
+  }
+
+  function submitObservationReview(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    submitMutation(form, 'save-observation-review', 'apiReviewObservation', {
+      observationId: form.elements.observationId.value,
+      decision: form.elements.decision.value,
+      response: form.elements.response.value
+    }, 'Observación atendida correctamente.');
+  }
+
+  function submitReassignment(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    submitMutation(form, 'save-reassignment', 'apiReassignContribution', {
+      contributionId: form.elements.contributionId.value,
+      responsibleId: form.elements.responsibleId.value,
+      reason: form.elements.reason.value
+    }, 'Contribución reasignada correctamente.');
+  }
+
+  function submitSplit(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const partOneDetail = form.elements.part1Detail.value;
+    const partTwoDetail = form.elements.part2Detail.value;
+    submitMutation(form, 'save-split', 'apiSplitContribution', {
+      contributionId: form.elements.contributionId.value,
+      reason: form.elements.reason.value,
+      parts: [{
+        description: form.elements.part1Description.value,
+        responsibleId: form.elements.part1ResponsibleId.value,
+        type: form.elements.part1Type.value,
+        scopeLevel: Number(form.elements.part1Scope.value),
+        complexityLevel: Number(form.elements.part1Complexity.value),
+        scopeDetail: partOneDetail,
+        complexityDetail: partOneDetail
+      }, {
+        description: form.elements.part2Description.value,
+        responsibleId: form.elements.part2ResponsibleId.value,
+        type: form.elements.part2Type.value,
+        scopeLevel: Number(form.elements.part2Scope.value),
+        complexityLevel: Number(form.elements.part2Complexity.value),
+        scopeDetail: partTwoDetail,
+        complexityDetail: partTwoDetail
+      }]
+    }, 'Contribución dividida sin alterar su valor total.');
+  }
+
+  function submitDeadline(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const deadline = form.elements.deadline.value;
+    submitMutation(form, 'save-deadline', 'apiChangeActivityDeadline', {
+      activityId: form.elements.activityId.value,
+      deadline: deadline ? new Date(deadline).toISOString() : '',
+      reason: form.elements.reason.value
+    }, 'Fecha límite actualizada correctamente.');
+  }
+
+  function submitMutation(form, buttonId, method, payload, successMessage) {
+    const button = document.getElementById(buttonId);
+    const defaultText = button.textContent;
+    setBusy(button, true, 'Guardando…');
+    runServer(method, payload).then(function (data) {
+      form.reset();
+      closeAllModals();
+      renderApp(data);
+      showToast(successMessage);
+    }).catch(function (error) {
+      showToast(readError(error));
+    }).finally(function () {
+      setBusy(button, false, defaultText);
+    });
+  }
+
+  function readFilePayload(file) {
+    return new Promise(function (resolve, reject) {
+      const reader = new FileReader();
+      reader.onload = function () {
+        resolve({ name: file.name, mimeType: file.type, size: file.size, base64: String(reader.result).split(',')[1] });
+      };
+      reader.onerror = function () { reject(new Error('No se pudo leer el archivo.')); };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function openModal(id, focusElement) {
+    show(id);
+    window.setTimeout(function () { if (focusElement) focusElement.focus(); }, 30);
+  }
+
+  function closeAllModals() {
+    document.querySelectorAll('.modal-backdrop').forEach(function (modal) { modal.classList.add('is-hidden'); });
+  }
+
+  function runServer(method) {
+    const args = Array.prototype.slice.call(arguments, 1);
+    return new Promise(function (resolve, reject) {
+      if (!window.google || !google.script || !google.script.run) {
+        reject(new Error('Esta interfaz debe abrirse desde Google Apps Script.'));
+        return;
+      }
+      const runner = google.script.run.withSuccessHandler(resolve).withFailureHandler(reject);
+      runner[method].apply(runner, args);
+    });
+  }
+
+  function renderFatalError(error) {
+    hide('loading-view');
+    const notice = document.getElementById('global-message');
+    notice.textContent = readError(error);
+    show('global-message');
+    renderAnonymousChip('Acceso no disponible');
+  }
+
+  function statusBadge(status) {
+    const key = String(status || '').toLowerCase();
+    return '<span class="status status-' + escapeHtml(key) + '">' + escapeHtml(status) + '</span>';
+  }
+
+  function setBusy(button, busy, label) {
+    button.disabled = busy;
+    button.textContent = label;
+  }
+
+  function showToast(message) {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    show('toast');
+    window.clearTimeout(state.toastTimer);
+    state.toastTimer = window.setTimeout(function () { hide('toast'); }, 4200);
+  }
+
+  function findById(collection, id) {
+    return (collection || []).find(function (item) { return item.id === id; }) || null;
+  }
+
+  function readError(error) {
+    return error && error.message ? error.message : String(error || 'Ocurrió un error inesperado.');
+  }
+
+  function setText(id, value) { document.getElementById(id).textContent = value; }
+  function show(id) { document.getElementById(id).classList.remove('is-hidden'); }
+  function hide(id) { document.getElementById(id).classList.add('is-hidden'); }
+
+  function initials(value) {
+    return String(value || 'A').split(/\s+/).filter(Boolean).slice(0, 2).map(function (part) {
+      return part.charAt(0).toUpperCase();
+    }).join('');
+  }
+
+  function firstName(value) { return String(value || '').trim().split(/\s+/)[0] || 'integrante'; }
+
+  function greeting() {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Buenos días';
+    if (hour < 19) return 'Buenas tardes';
+    return 'Buenas noches';
+  }
+
+  function pluralize(count, singular, plural) { return count === 1 ? singular : plural; }
+
+  function formatPercentage(value) {
+    return value === null || typeof value === 'undefined' ? 'N/C' : Number(value).toFixed(2) + '%';
+  }
+
+  function clampPercentage(value) {
+    return Math.max(0, Math.min(100, Number(value || 0)));
+  }
+
+  function historyActionLabel(action) {
+    const labels = {
+      CREAR: 'Actividad creada',
+      ASIGNAR: 'Contribución asignada',
+      ENTREGAR: 'Evidencia registrada',
+      REASIGNAR: 'Responsabilidad reasignada',
+      DIVIDIR: 'Contribución dividida',
+      REPORTAR_OBSERVACION: 'Observación reportada',
+      CONFIRMAR_OBSERVACION: 'Observación confirmada',
+      DESCARTAR_OBSERVACION: 'Observación descartada',
+      CORREGIR: 'Contribución corregida',
+      CAMBIAR_FECHA: 'Fecha límite modificada',
+      REABRIR: 'Actividad reabierta',
+      CERRAR: 'Actividad culminada'
+    };
+    return labels[action] || String(action || '').replace(/_/g, ' ').toLowerCase();
+  }
+
+  function formatDate(value) {
+    const date = new Date(value);
+    if (isNaN(date.getTime())) return 'sin fecha';
+    return new Intl.DateTimeFormat('es-PE', {
+      timeZone: 'America/Lima', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    }).format(date);
+  }
+
+  function toLocalInputValue(date) {
+    const offset = date.getTimezoneOffset();
+    return new Date(date.getTime() - offset * 60000).toISOString().slice(0, 16);
+  }
+
+  function escapeHtml(value) {
+    return String(value == null ? '' : value).replace(/[&<>'"]/g, function (character) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;' }[character];
+    });
+  }
+</script>

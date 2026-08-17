@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="theme-color" content="#252b4a">
+    <?!= include('Styles'); ?>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Navegación principal">
+        <a class="brand" href="#inicio" data-section="inicio" aria-label="Aporta, inicio">
+          <span class="brand-mark">A</span>
+          <span><?= appName ?></span>
+        </a>
+
+        <nav class="main-nav">
+          <button class="nav-item is-active" type="button" data-section="inicio"><span class="nav-icon" aria-hidden="true">01</span> Inicio</button>
+          <button class="nav-item" type="button" data-section="actividades"><span class="nav-icon" aria-hidden="true">02</span> Actividades</button>
+          <button class="nav-item" type="button" data-section="resultados"><span class="nav-icon" aria-hidden="true">03</span> Resultados</button>
+          <button class="nav-item admin-only is-hidden" type="button" data-section="equipo"><span class="nav-icon" aria-hidden="true">04</span> Equipo</button>
+        </nav>
+
+        <div class="sidebar-note">
+          <span class="eyebrow">Objetivo</span>
+          <p>Convertir cada aporte en una participación clara y demostrable.</p>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div><p class="eyebrow">Gestión de la Innovación</p><h1 id="page-title">Tu aporte, claro y demostrable</h1></div>
+          <div id="user-chip" class="user-chip is-loading" aria-live="polite">
+            <span class="avatar">…</span>
+            <span class="user-copy"><strong>Cargando</strong><small>Verificando acceso</small></span>
+          </div>
+        </header>
+
+        <div id="global-message" class="notice is-hidden" role="status"></div>
+
+        <section id="loading-view" class="loading-view" aria-label="Cargando Aporta">
+          <div class="skeleton skeleton-hero"></div>
+          <div class="metric-grid"><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div></div>
+        </section>
+
+        <section id="setup-view" class="empty-stage is-hidden">
+          <span class="empty-number">00</span>
+          <p class="eyebrow">Configuración inicial</p>
+          <h2>Aporta está listo para crear su espacio de trabajo</h2>
+          <p>El administrador debe ejecutar una sola vez la función <code>setupAporta</code> desde Google Apps Script.</p>
+        </section>
+
+        <section id="dashboard-view" class="app-view is-hidden" data-view="inicio">
+          <div class="hero-panel">
+            <div><p class="eyebrow light">Resumen personal</p><h2 id="welcome-title">Estás al día</h2><p id="welcome-copy">Aquí verás tus responsabilidades y la evidencia que debes registrar.</p></div>
+            <button id="new-activity-button" class="primary-button admin-only is-hidden" type="button">Nueva actividad</button>
+          </div>
+          <div class="metric-grid" aria-label="Resumen">
+            <article class="metric-card"><span class="metric-label">Actividades abiertas</span><strong id="open-activities-count">0</strong><small>Con plazo vigente</small></article>
+            <article class="metric-card accent-card"><span class="metric-label">Mis pendientes</span><strong id="pending-count">0</strong><small>Responsabilidades por entregar</small></article>
+            <article class="metric-card"><span class="metric-label">Mis entregas</span><strong id="delivered-count">0</strong><small>Aportes registrados</small></article>
+          </div>
+          <div class="content-grid">
+            <section class="panel" aria-labelledby="activities-heading">
+              <div class="panel-heading"><div><p class="eyebrow">Próximos cierres</p><h2 id="activities-heading">Actividades</h2></div><button class="text-button" type="button" data-section="actividades">Ver todas</button></div>
+              <div id="activities-list" class="stack-list"></div>
+            </section>
+            <section class="panel" aria-labelledby="contributions-heading">
+              <div class="panel-heading"><div><p class="eyebrow">Mi trabajo</p><h2 id="contributions-heading">Contribuciones</h2></div></div>
+              <div id="contributions-list" class="stack-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="activities-view" class="app-view is-hidden" data-view="actividades">
+          <div class="section-toolbar">
+            <div class="page-intro"><p class="eyebrow">Trabajo del ciclo</p><h2>Actividades del equipo</h2><p>Revisa entregables, responsables y evidencias desde un solo lugar.</p></div>
+            <button class="primary-button admin-only is-hidden" type="button" data-new-activity>Nueva actividad</button>
+          </div>
+          <div id="activities-grid" class="activity-grid"></div>
+        </section>
+
+        <section id="activity-detail-view" class="app-view is-hidden" data-view="detalle">
+          <button class="back-button" type="button" data-section="actividades">← Volver a actividades</button>
+          <div id="activity-detail-content"></div>
+        </section>
+
+        <section id="results-view" class="app-view is-hidden" data-view="resultados">
+          <div class="section-toolbar">
+            <div class="page-intro"><p class="eyebrow">Matriz de participación</p><h2>Resultados explicables</h2><p>Compara el cumplimiento individual con la proporción del trabajo producido.</p></div>
+            <label class="compact-select">Actividad<select id="results-activity-select"></select></label>
+          </div>
+          <div id="results-content" class="results-content"></div>
+        </section>
+
+        <section id="team-view" class="app-view is-hidden" data-view="equipo">
+          <div class="section-toolbar">
+            <div class="page-intro"><p class="eyebrow">Administración</p><h2>Equipo</h2><p>Los integrantes desactivados conservan todo su historial.</p></div>
+            <button id="new-member-button" class="primary-button" type="button">Agregar integrante</button>
+          </div>
+          <div class="panel table-panel"><div class="table-wrap"><table class="team-table"><thead><tr><th>Integrante</th><th>Rol</th><th>Estado</th><th></th></tr></thead><tbody id="members-table-body"></tbody></table></div></div>
+        </section>
+      </main>
+    </div>
+
+    <div id="activity-modal" class="modal-backdrop is-hidden" role="dialog" aria-modal="true" aria-labelledby="activity-modal-title">
+      <div class="modal-card">
+        <div class="modal-heading"><div><p class="eyebrow">Administración</p><h2 id="activity-modal-title">Nueva actividad</h2></div><button class="icon-button" type="button" data-close-modal aria-label="Cerrar">×</button></div>
+        <form id="activity-form">
+          <label>Nombre<input name="name" maxlength="120" required placeholder="Ej. Encuesta sobre inteligencia artificial"></label>
+          <label>Descripción<textarea name="description" maxlength="800" rows="4" placeholder="Explica brevemente el resultado esperado"></textarea></label>
+          <label>Fecha y hora límite<input name="deadline" type="datetime-local" required></label>
+          <div class="form-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button><button class="primary-button" id="save-activity" type="submit">Crear actividad</button></div>
+        </form>
+      </div>
+    </div>
+
+    <div id="member-modal" class="modal-backdrop is-hidden" role="dialog" aria-modal="true" aria-labelledby="member-modal-title">
+      <div class="modal-card">
+        <div class="modal-heading"><div><p class="eyebrow">Equipo</p><h2 id="member-modal-title">Agregar integrante</h2></div><button class="icon-button" type="button" data-close-modal aria-label="Cerrar">×</button></div>
+        <form id="member-form">
+          <input name="id" type="hidden">
+          <label>Nombre<input name="name" maxlength="100" required placeholder="Nombre del integrante"></label>
+          <label>Correo de Google<input name="email" type="email" maxlength="160" required placeholder="persona@gmail.com"></label>
+          <label>Rol<select name="role"><option>Integrante</option><option>Administrador</option></select></label>
+          <label class="check-label"><input name="active" type="checkbox" checked> Integrante activo</label>
+          <div class="form-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button><button class="primary-button" id="save-member" type="submit">Guardar integrante</button></div>
+        </form>
+      </div>
+    </div>
+
+    <div id="deliverable-modal" class="modal-backdrop is-hidden" role="dialog" aria-modal="true" aria-labelledby="deliverable-modal-title">
+      <div class="modal-card">
+        <div class="modal-heading"><div><p class="eyebrow">Actividad</p><h2 id="deliverable-modal-title">Nuevo entregable</h2></div><button class="icon-button" type="button" data-close-modal aria-label="Cerrar">×</button></div>
+        <form id="deliverable-form">
+          <input name="activityId" type="hidden">
+          <label>Nombre<input name="name" maxlength="120" required placeholder="Ej. Presentación final"></label>
+          <label>Tipo<select name="type"><option>Documento</option><option>Excel</option><option>Encuesta</option><option>Presentación</option><option>PDF</option><option>Video</option><option>Formulario</option><option>Otro</option></select></label>
+          <label>Descripción<textarea name="description" maxlength="500" rows="3"></textarea></label>
+          <label>Enlace principal opcional<input name="link" type="url" maxlength="500" placeholder="https://..."></label>
+          <div class="form-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button><button class="primary-button" id="save-deliverable" type="submit">Crear entregable</button></div>
+        </form>
+      </div>
+    </div>
+
+    <div id="contribution-modal" class="modal-backdrop is-hidden" role="dialog" aria-modal="true" aria-labelledby="contribution-modal-title">
+      <div class="modal-card wide-modal">
+        <div class="modal-heading"><div><p class="eyebrow">Responsabilidad</p><h2 id="contribution-modal-title">Nueva contribución</h2></div><button class="icon-button" type="button" data-close-modal aria-label="Cerrar">×</button></div>
+        <form id="contribution-form">
+          <input name="activityId" type="hidden">
+          <div class="form-grid">
+            <label class="field-span">Descripción<input name="description" maxlength="500" required placeholder="Ej. Interpretar los resultados de la encuesta"></label>
+            <label>Responsable<select id="contribution-responsible" name="responsibleId" required></select></label>
+            <label>Entregable opcional<select id="contribution-deliverable" name="deliverableId"></select></label>
+            <label class="field-span">Tipo de tarea<select id="contribution-type" name="type" required></select></label>
+            <label>Alcance<select id="contribution-scope" name="scopeLevel"><option value="0">Pequeño (+0)</option><option value="1" selected>Medio (+1)</option><option value="2">Amplio (+2)</option><option value="3">Excepcional (+3)</option></select></label>
+            <label>Complejidad<select id="contribution-complexity" name="complexityLevel"><option value="0">Básica (+0)</option><option value="1" selected>Estructurada (+1)</option><option value="2">Analítica o técnica (+2)</option></select></label>
+            <label>Detalle del alcance<input name="scopeDetail" maxlength="180" required placeholder="Ej. 3 variables y 4 gráficos"></label>
+            <label>Criterio de complejidad<input name="complexityDetail" maxlength="180" required placeholder="Ej. Requiere interpretar relaciones"></label>
+          </div>
+          <div id="valuation-preview" class="valuation-box" aria-live="polite"></div>
+          <div class="form-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button><button class="primary-button" id="save-contribution" type="submit">Asignar contribución</button></div>
+        </form>
+      </div>
+    </div>
+
+    <div id="evidence-modal" class="modal-backdrop is-hidden" role="dialog" aria-modal="true" aria-labelledby="evidence-modal-title">
+      <div class="modal-card">
+        <div class="modal-heading"><div><p class="eyebrow">Entrega</p><h2 id="evidence-modal-title">Registrar evidencia</h2></div><button class="icon-button" type="button" data-close-modal aria-label="Cerrar">×</button></div>
+        <form id="evidence-form">
+          <input name="contributionId" type="hidden">
+          <div id="evidence-contribution-summary" class="selection-summary"></div>
+          <label>Tipo de evidencia<select id="evidence-type" name="type"><option>Archivo</option><option>Enlace</option><option>Referencia</option><option>Texto</option><option>Presencial</option></select></label>
+          <label id="evidence-file-field">Archivo, máximo 5 MB<input name="file" type="file"></label>
+          <label id="evidence-url-field" class="is-hidden">Enlace<input name="url" type="url" maxlength="700" placeholder="https://..."></label>
+          <label>Descripción<textarea name="description" maxlength="800" rows="4" placeholder="Explica qué realizaste o dónde puede verificarse"></textarea></label>
+          <div class="form-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button><button class="primary-button" id="save-evidence" type="submit">Registrar entrega</button></div>
+        </form>
+      </div>
+    </div>
+
+    <div id="observation-modal" class="modal-backdrop is-hidden" role="dialog" aria-modal="true" aria-labelledby="observation-modal-title">
+      <div class="modal-card">
+        <div class="modal-heading"><div><p class="eyebrow">Revisión por excepción</p><h2 id="observation-modal-title">Reportar observación</h2></div><button class="icon-button" type="button" data-close-modal aria-label="Cerrar">×</button></div>
+        <form id="observation-form">
+          <input name="contributionId" type="hidden">
+          <div id="observation-summary" class="selection-summary"></div>
+          <label>Problema verificable<textarea name="reason" minlength="10" maxlength="600" rows="5" required placeholder="Indica qué evidencia falta, no corresponde o no puede verificarse"></textarea></label>
+          <div class="form-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button><button class="primary-button" id="save-observation" type="submit">Enviar reporte</button></div>
+        </form>
+      </div>
+    </div>
+
+    <div id="review-observation-modal" class="modal-backdrop is-hidden" role="dialog" aria-modal="true" aria-labelledby="review-observation-title">
+      <div class="modal-card">
+        <div class="modal-heading"><div><p class="eyebrow">Administración</p><h2 id="review-observation-title">Revisar observación</h2></div><button class="icon-button" type="button" data-close-modal aria-label="Cerrar">×</button></div>
+        <form id="review-observation-form">
+          <input name="observationId" type="hidden">
+          <div id="review-observation-summary" class="selection-summary"></div>
+          <label>Decisión<select name="decision"><option>Confirmar</option><option>Descartar</option></select></label>
+          <label>Respuesta opcional<textarea name="response" maxlength="400" rows="3" placeholder="Explica brevemente la decisión"></textarea></label>
+          <div class="form-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button><button class="primary-button" id="save-observation-review" type="submit">Guardar decisión</button></div>
+        </form>
+      </div>
+    </div>
+
+    <div id="reassign-modal" class="modal-backdrop is-hidden" role="dialog" aria-modal="true" aria-labelledby="reassign-modal-title">
+      <div class="modal-card">
+        <div class="modal-heading"><div><p class="eyebrow">Cambio de responsabilidad</p><h2 id="reassign-modal-title">Reasignar contribución</h2></div><button class="icon-button" type="button" data-close-modal aria-label="Cerrar">×</button></div>
+        <form id="reassign-form">
+          <input name="contributionId" type="hidden">
+          <div id="reassign-summary" class="selection-summary"></div>
+          <label>Nuevo responsable<select id="reassign-responsible" name="responsibleId" required></select></label>
+          <label>Motivo opcional<textarea name="reason" maxlength="300" rows="3"></textarea></label>
+          <div class="form-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button><button class="primary-button" id="save-reassignment" type="submit">Reasignar</button></div>
+        </form>
+      </div>
+    </div>
+
+    <div id="split-modal" class="modal-backdrop is-hidden" role="dialog" aria-modal="true" aria-labelledby="split-modal-title">
+      <div class="modal-card wide-modal">
+        <div class="modal-heading"><div><p class="eyebrow">Trabajo parcialmente realizado</p><h2 id="split-modal-title">Dividir contribución</h2></div><button class="icon-button" type="button" data-close-modal aria-label="Cerrar">×</button></div>
+        <form id="split-form">
+          <input name="contributionId" type="hidden">
+          <div id="split-summary" class="selection-summary"></div>
+          <div class="split-grid">
+            <fieldset>
+              <legend>Parte realizada o inicial</legend>
+              <label>Descripción<input name="part1Description" maxlength="500" required></label>
+              <label>Responsable<select id="split-part1-responsible" name="part1ResponsibleId" required></select></label>
+              <label>Tipo<select id="split-part1-type" name="part1Type" required></select></label>
+              <div class="form-grid"><label>Alcance<select name="part1Scope"><option value="0">Pequeño</option><option value="1" selected>Medio</option><option value="2">Amplio</option><option value="3">Excepcional</option></select></label><label>Complejidad<select name="part1Complexity"><option value="0">Básica</option><option value="1" selected>Estructurada</option><option value="2">Analítica</option></select></label></div>
+              <label>Detalle<input name="part1Detail" maxlength="180" required></label>
+            </fieldset>
+            <fieldset>
+              <legend>Parte restante</legend>
+              <label>Descripción<input name="part2Description" maxlength="500" required></label>
+              <label>Responsable<select id="split-part2-responsible" name="part2ResponsibleId" required></select></label>
+              <label>Tipo<select id="split-part2-type" name="part2Type" required></select></label>
+              <div class="form-grid"><label>Alcance<select name="part2Scope"><option value="0">Pequeño</option><option value="1" selected>Medio</option><option value="2">Amplio</option><option value="3">Excepcional</option></select></label><label>Complejidad<select name="part2Complexity"><option value="0">Básica</option><option value="1" selected>Estructurada</option><option value="2">Analítica</option></select></label></div>
+              <label>Detalle<input name="part2Detail" maxlength="180" required></label>
+            </fieldset>
+          </div>
+          <label>Motivo opcional<textarea name="reason" maxlength="300" rows="2"></textarea></label>
+          <p class="form-note">El valor original se repartirá proporcionalmente entre ambas partes para evitar inflar la actividad.</p>
+          <div class="form-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button><button class="primary-button" id="save-split" type="submit">Dividir contribución</button></div>
+        </form>
+      </div>
+    </div>
+
+    <div id="deadline-modal" class="modal-backdrop is-hidden" role="dialog" aria-modal="true" aria-labelledby="deadline-modal-title">
+      <div class="modal-card">
+        <div class="modal-heading"><div><p class="eyebrow">Plazo</p><h2 id="deadline-modal-title">Cambiar fecha límite</h2></div><button class="icon-button" type="button" data-close-modal aria-label="Cerrar">×</button></div>
+        <form id="deadline-form">
+          <input name="activityId" type="hidden">
+          <label>Nueva fecha y hora<input name="deadline" type="datetime-local" required></label>
+          <label>Motivo opcional<textarea name="reason" maxlength="300" rows="3"></textarea></label>
+          <p class="form-note">Si la actividad estaba culminada, conservará su resultado anterior y abrirá una nueva versión.</p>
+          <div class="form-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button><button class="primary-button" id="save-deadline" type="submit">Guardar plazo</button></div>
+        </form>
+      </div>
+    </div>
+
+    <div id="toast" class="toast is-hidden" role="status" aria-live="polite"></div>
+    <?!= include('Scripts'); ?>
+  </body>
+</html>
