@@ -1,12 +1,13 @@
 const APP_CONFIG = Object.freeze({
   name: 'Aporta',
-  version: '0.3.0',
-  schemaVersion: '3',
+  version: '0.4.0',
+  schemaVersion: '4',
   timezone: 'America/Lima',
   maxUploadBytes: 5 * 1024 * 1024,
-  spreadsheetProperty: 'APORTA_SPREADSHEET_ID',
-  driveFolderProperty: 'APORTA_DRIVE_FOLDER_ID',
-  reportFolderProperty: 'APORTA_REPORT_FOLDER_ID'
+  spreadsheetProperty: 'SPREADSHEET_ID',
+  driveFolderProperty: 'EVIDENCIAS_FOLDER_ID',
+  reportFolderProperty: 'REPORTES_FOLDER_ID',
+  ownerEmailProperty: 'APORTA_OWNER_EMAIL'
 });
 
 const SHEET_SCHEMAS = Object.freeze({
@@ -28,6 +29,11 @@ const SHEET_SCHEMAS = Object.freeze({
     'fecha_entrega', 'vigente', 'reemplazada_por', 'alcance_detalle',
     'complejidad_detalle', 'creador_id', 'valor_bruto',
     'origen_contribucion_id'
+  ],
+  REASIGNACIONES: [
+    'id', 'contribucion_id', 'actividad_id', 'responsable_anterior_id',
+    'responsable_nuevo_id', 'tipo', 'valor', 'motivo', 'fecha',
+    'creado_por'
   ],
   EVIDENCIAS: [
     'id', 'contribucion_id', 'tipo', 'url', 'drive_file_id', 'descripcion',
@@ -52,6 +58,11 @@ const SHEET_SCHEMAS = Object.freeze({
     'participacion_relativa', 'fecha_cierre'
   ],
   CONFIGURACION: ['clave', 'valor', 'descripcion']
+});
+
+const REASSIGNMENT_TYPES = Object.freeze({
+  REORGANIZATION: 'Reorganización',
+  NONCOMPLIANCE: 'Incumplimiento'
 });
 
 const DEFAULT_VALUATION_RULES = Object.freeze([

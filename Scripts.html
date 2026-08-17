@@ -32,6 +32,7 @@
     document.getElementById('contribution-type').addEventListener('change', updateValuationPreview);
     document.getElementById('contribution-scope').addEventListener('change', updateValuationPreview);
     document.getElementById('contribution-complexity').addEventListener('change', updateValuationPreview);
+    document.getElementById('reassignment-type').addEventListener('change', updateReassignmentFields);
     document.getElementById('new-activity-button').addEventListener('click', openActivityModal);
     document.getElementById('new-member-button').addEventListener('click', function () {
       openMemberModal();
@@ -192,7 +193,15 @@
       resultados: 'Resultados de participación',
       equipo: 'Integrantes y permisos'
     };
+    const descriptions = {
+      inicio: 'Consulta tus responsabilidades, próximos cierres y entregas registradas.',
+      actividades: 'Revisa entregables, responsables y evidencias desde un solo lugar.',
+      detalle: 'Consulta el trabajo asignado, sus evidencias y la trazabilidad de la actividad.',
+      resultados: 'Compara el cumplimiento individual con la proporción del trabajo producido.',
+      equipo: 'Administra integrantes, roles y accesos sin eliminar su historial.'
+    };
     document.getElementById('page-title').textContent = titles[section] || titles.inicio;
+    document.getElementById('page-description').textContent = descriptions[section] || descriptions.inicio;
     if (section === 'detalle') renderActivityDetail();
     if (section === 'resultados') renderResults();
     if (!preserveScroll) window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -228,7 +237,9 @@
   function renderDashboardActivities(activities) {
     const container = document.getElementById('activities-list');
     if (!activities.length) {
-      container.innerHTML = '<div class="empty-inline">Aún no hay actividades. Crea la primera para distribuir responsabilidades.</div>';
+      container.innerHTML = '<div class="empty-inline">' + (state.data.user.isAdmin
+        ? 'Aún no hay actividades. Crea la primera para distribuir responsabilidades.'
+        : 'Aún no hay actividades registradas por el administrador.') + '</div>';
       return;
     }
     container.innerHTML = activities.slice(0, 5).map(function (activity) {
@@ -245,17 +256,24 @@
       return;
     }
     container.innerHTML = contributions.slice(0, 5).map(function (item) {
-      const canSubmit = item.actividad_estado === 'Pendiente';
+      const open = item.actividad_estado === 'Pendiente';
+      const action = open && item.estado === 'Pendiente'
+        ? '<button class="compact-button" type="button" data-submit-evidence="' + escapeHtml(item.id) + '">Entregar</button>'
+        : (open && item.estado === 'Observado'
+          ? '<button class="compact-button warning-button" type="button" data-submit-evidence="' + escapeHtml(item.id) + '">Corregir</button>'
+          : statusBadge(item.estado));
       return '<article class="contribution-mini"><div><strong>' + escapeHtml(item.descripcion) + '</strong>' +
         '<small>' + escapeHtml(item.actividad_nombre) + ' · ' + item.valor_calculado + ' puntos</small></div>' +
-        (canSubmit ? '<button class="compact-button" type="button" data-submit-evidence="' + escapeHtml(item.id) + '">Entregar</button>' : statusBadge(item.estado)) + '</article>';
+        action + '</article>';
     }).join('');
   }
 
   function renderActivitiesGrid(activities) {
     const container = document.getElementById('activities-grid');
     if (!activities.length) {
-      container.innerHTML = '<div class="empty-stage compact-stage"><span class="empty-number">01</span><h2>Crea la primera actividad</h2><p>Después podrás añadir entregables y distribuir contribuciones.</p></div>';
+      container.innerHTML = state.data.user.isAdmin
+        ? '<div class="empty-stage compact-stage"><span class="empty-number">01</span><h2>Crea la primera actividad</h2><p>Después podrás añadir entregables y distribuir contribuciones.</p></div>'
+        : '<div class="empty-stage compact-stage"><span class="empty-number">01</span><h2>Aún no hay actividades</h2><p>Cuando el administrador registre una actividad, aparecerá aquí.</p></div>';
       return;
     }
     container.innerHTML = activities.map(function (activity) {
@@ -306,7 +324,12 @@
         return '<div class="observation-item"><div><span class="observation-meta">' + escapeHtml(observation.creatorName) + ' · ' + escapeHtml(observation.status) + '</span><p>' + escapeHtml(observation.reason) + '</p></div>' + reviewAction + '</div>';
       }).join('') + '</div>' : '';
       const managementActions = [];
-      if (canSubmit) managementActions.push('<button class="compact-button" type="button" data-submit-evidence="' + escapeHtml(item.id) + '">Registrar evidencia</button>');
+      if (canSubmit) {
+        const evidenceLabel = item.estado === 'Observado'
+          ? 'Corregir evidencia'
+          : (item.estado === 'Entregado' ? 'Añadir evidencia' : 'Registrar evidencia');
+        managementActions.push('<button class="compact-button" type="button" data-submit-evidence="' + escapeHtml(item.id) + '">' + evidenceLabel + '</button>');
+      }
       if (canObserve) managementActions.push('<button class="compact-button warning-button" type="button" data-report-observation="' + escapeHtml(item.id) + '">Observar</button>');
       if (state.data.user.isAdmin && open && item.estado === 'Pendiente' && !item.evidenceCount && !hasOpenObservation) {
         managementActions.push('<button class="compact-button" type="button" data-reassign="' + escapeHtml(item.id) + '">Reasignar</button>');
@@ -326,7 +349,9 @@
     const relatedIds = [activity.id].concat(deliverables.map(function (item) { return item.id; }), contributions.map(function (item) { return item.id; }));
     const history = state.data.history.filter(function (item) { return relatedIds.indexOf(item.entityId) >= 0; }).slice(0, 12);
     const historyHtml = history.length ? history.map(function (item) {
-      return '<li><span class="timeline-dot"></span><div><strong>' + historyActionLabel(item.action) + '</strong><p>' + escapeHtml(item.userName) + ' · ' + formatDate(item.date) + '</p></div></li>';
+      return '<li><span class="timeline-dot"></span><div><strong>' + historyActionLabel(item.action) + '</strong>' +
+        (item.summary ? '<small class="timeline-detail">' + escapeHtml(item.summary) + '</small>' : '') +
+        '<p>' + escapeHtml(item.userName) + ' · ' + formatDate(item.date) + '</p></div></li>';
     }).join('') : '<li class="empty-inline">Todavía no hay movimientos registrados.</li>';
 
     document.getElementById('activity-detail-content').innerHTML = '<section class="detail-hero"><div><div class="detail-kicker">' + statusBadge(activity.estado) + '<span>' + escapeHtml(activity.id) + '</span></div><h2>' + escapeHtml(activity.nombre) + '</h2><p>' + escapeHtml(activity.descripcion || 'Sin descripción adicional.') + '</p><small>Fecha límite: ' + formatDate(activity.fecha_limite) + '</small></div>' + adminActions + '</section>' +
@@ -359,7 +384,9 @@
     const select = document.getElementById('results-activity-select');
     const container = document.getElementById('results-content');
     if (!state.data.activities.length) {
-      container.innerHTML = '<div class="empty-stage compact-stage"><span class="empty-number">%</span><h2>Aún no hay resultados</h2><p>Crea una actividad y asigna contribuciones para comenzar.</p></div>';
+      container.innerHTML = '<div class="empty-stage compact-stage"><span class="empty-number">%</span><h2>Aún no hay resultados</h2><p>' + (state.data.user.isAdmin
+        ? 'Crea una actividad y asigna contribuciones para comenzar.'
+        : 'Los resultados aparecerán cuando el administrador asigne contribuciones.') + '</p></div>';
       return;
     }
 
@@ -389,7 +416,7 @@
   function populateContributionOptions() {
     const rules = state.data.valuationRules || [];
     document.getElementById('contribution-type').innerHTML = rules.map(function (rule) {
-      return '<option value="' + escapeHtml(rule.type) + '">' + escapeHtml(rule.type) + ' · base ' + rule.base + '</option>';
+      return '<option value="' + escapeHtml(rule.type) + '">' + escapeHtml(rule.type) + '</option>';
     }).join('');
     document.getElementById('contribution-responsible').innerHTML = state.data.members.filter(function (member) {
       return member.active;
@@ -480,6 +507,8 @@
     form.elements.contributionId.value = contributionId;
     document.getElementById('reassign-summary').innerHTML = '<strong>' + escapeHtml(contribution.descripcion) + '</strong><small>Responsable actual: ' + escapeHtml(contribution.responsable_nombre) + '</small>';
     document.getElementById('reassign-responsible').innerHTML = activeMemberOptions(contribution.responsable_id);
+    form.elements.reassignmentType.value = 'Reorganización';
+    updateReassignmentFields();
     openModal('reassign-modal', form.elements.responsibleId);
   }
 
@@ -550,13 +579,27 @@
     const scope = Number(document.getElementById('contribution-scope').value || 0);
     const complexity = Number(document.getElementById('contribution-complexity').value || 0);
     const value = Math.min(10, Number(rule.base) + scope + complexity);
-    document.getElementById('valuation-preview').innerHTML = '<span>Valor automático</span><strong>' + value + ' puntos</strong><small>' + rule.base + ' base + ' + scope + ' alcance + ' + complexity + ' complejidad</small>';
+    document.getElementById('valuation-preview').innerHTML = '<span>Valor automático final</span><strong>' + value + ' puntos</strong><small>Calculado según el tipo de tarea, el alcance y la complejidad seleccionados.</small>';
   }
 
   function updateEvidenceFields() {
     const type = document.getElementById('evidence-type').value;
     document.getElementById('evidence-file-field').classList.toggle('is-hidden', type !== 'Archivo');
     document.getElementById('evidence-url-field').classList.toggle('is-hidden', type !== 'Enlace');
+  }
+
+  function updateReassignmentFields() {
+    const type = document.getElementById('reassignment-type').value;
+    const reason = document.getElementById('reassignment-reason');
+    const noncompliance = type === 'Incumplimiento';
+    reason.required = noncompliance;
+    reason.minLength = noncompliance ? 10 : 0;
+    reason.placeholder = noncompliance
+      ? 'Explica qué responsabilidad no fue realizada y por qué debe asumirla otra persona'
+      : 'Describe brevemente por qué se reorganiza el trabajo';
+    document.getElementById('reassignment-help').textContent = noncompliance
+      ? 'El incumplimiento conserva esta responsabilidad en el cálculo individual del responsable anterior.'
+      : 'La reorganización traslada la responsabilidad sin perjudicar a la persona anterior.';
   }
 
   function submitActivity(event) {
@@ -664,6 +707,7 @@
     submitMutation(form, 'save-reassignment', 'apiReassignContribution', {
       contributionId: form.elements.contributionId.value,
       responsibleId: form.elements.responsibleId.value,
+      reassignmentType: form.elements.reassignmentType.value,
       reason: form.elements.reason.value
     }, 'Contribución reasignada correctamente.');
   }
@@ -824,6 +868,8 @@
       ASIGNAR: 'Contribución asignada',
       ENTREGAR: 'Evidencia registrada',
       REASIGNAR: 'Responsabilidad reasignada',
+      REASIGNAR_REORGANIZACION: 'Responsabilidad reorganizada',
+      REASIGNAR_INCUMPLIMIENTO: 'Traspaso por incumplimiento',
       DIVIDIR: 'Contribución dividida',
       REPORTAR_OBSERVACION: 'Observación reportada',
       CONFIRMAR_OBSERVACION: 'Observación confirmada',

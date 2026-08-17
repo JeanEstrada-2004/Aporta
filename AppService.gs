@@ -22,7 +22,7 @@ function setupAporta() {
       );
     }
 
-    const ownerEmail = normalizeEmail_(Session.getEffectiveUser().getEmail());
+    const ownerEmail = getSetupOwnerEmail_();
     if (!ownerEmail) {
       throw new Error('No se pudo identificar la cuenta que configura Aporta.');
     }
@@ -67,7 +67,6 @@ function setupAporta() {
     appendHistory_(adminId, 'CONFIGURAR', 'SISTEMA', 'APORTA', {
       schemaVersion: APP_CONFIG.schemaVersion
     });
-    ensureClosureTrigger_();
 
     return {
       alreadyConfigured: false,
@@ -114,6 +113,7 @@ function getBootstrapData_(skipSynchronization) {
   });
   const evidences = getRecords_('EVIDENCIAS');
   const observations = getRecords_('OBSERVACIONES');
+  const reassignments = getRecords_('REASIGNACIONES');
   const allContributions = getRecords_('CONTRIBUCIONES')
     .filter(function (item) {
       return item.vigente !== false;
@@ -207,7 +207,8 @@ function getBootstrapData_(skipSynchronization) {
       userName: item.usuario_id === 'SISTEMA' ? 'Sistema' : (historyMember.nombre || item.usuario_id),
       action: item.accion,
       entity: item.entidad,
-      entityId: item.entidad_id
+      entityId: item.entidad_id,
+      summary: getHistorySummaryForClient_(item, memberMap)
     };
   });
 
@@ -241,8 +242,43 @@ function getBootstrapData_(skipSynchronization) {
     evidences: publicEvidence,
     observations: publicObservations,
     history: history,
-    resultSets: getResultSetsForClient_(activities, members, contributions)
+    resultSets: getResultSetsForClient_(activities, members, contributions, reassignments)
   };
+}
+
+function getHistorySummaryForClient_(historyItem, memberMap) {
+  let detail = {};
+  try {
+    detail = JSON.parse(historyItem.detalle_json || '{}');
+  } catch (error) {
+    return '';
+  }
+
+  function memberName(id, storedName) {
+    const member = memberMap[id] || {};
+    return cleanText_(storedName || member.nombre || id, 100);
+  }
+
+  if (historyItem.accion === 'REASIGNAR_REORGANIZACION' ||
+      historyItem.accion === 'REASIGNAR_INCUMPLIMIENTO') {
+    const previous = memberName(detail.responsableAnterior, detail.responsableAnteriorNombre);
+    const next = memberName(detail.responsableNuevo, detail.responsableNuevoNombre);
+    const parts = [previous + ' → ' + next, cleanText_(detail.tipo, 40)];
+    const reason = cleanText_(detail.motivo, 180);
+    if (reason) parts.push(reason);
+    return parts.filter(Boolean).join(' · ');
+  }
+
+  if (historyItem.accion === 'DIVIDIR') {
+    const values = Array.isArray(detail.valoresNuevos) ? detail.valoresNuevos.join(' + ') : '';
+    return values ? 'Valor conservado: ' + values + ' = ' + Number(detail.valorOriginal || 0) : '';
+  }
+
+  if (historyItem.accion === 'CERRAR' && detail.version) {
+    return 'Versión de cierre ' + Number(detail.version);
+  }
+
+  return '';
 }
 
 function createActivity_(payload) {

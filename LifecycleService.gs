@@ -1,12 +1,3 @@
-function ensureClosureTrigger_() {
-  const exists = ScriptApp.getProjectTriggers().some(function (trigger) {
-    return trigger.getHandlerFunction() === 'closeExpiredActivities';
-  });
-  if (!exists) {
-    ScriptApp.newTrigger('closeExpiredActivities').timeBased().everyMinutes(15).create();
-  }
-}
-
 function synchronizeExpiredActivities_() {
   const now = Date.now();
   const activities = getRecords_('ACTIVIDADES');
@@ -29,6 +20,9 @@ function closeActivityRecord_(activity, actorId, reason) {
   const contributions = getRecords_('CONTRIBUCIONES').filter(function (item) {
     return item.actividad_id === activity.id && item.vigente !== false;
   });
+  const reassignments = getRecords_('REASIGNACIONES').filter(function (item) {
+    return item.actividad_id === activity.id;
+  });
   const contributionIds = contributions.map(function (item) { return item.id; });
 
   getRecords_('OBSERVACIONES').forEach(function (observation) {
@@ -42,7 +36,7 @@ function closeActivityRecord_(activity, actorId, reason) {
     }
   });
 
-  const rows = calculateParticipationRows_(contributions);
+  const rows = calculateParticipationRows_(contributions, reassignments);
   rows.forEach(function (row) {
     appendRecord_('RESULTADOS', {
       id_cierre: closureId,
@@ -70,7 +64,7 @@ function closeActivityRecord_(activity, actorId, reason) {
   });
 }
 
-function calculateParticipationRows_(contributions) {
+function calculateParticipationRows_(contributions, reassignments) {
   const totals = {};
   contributions.forEach(function (item) {
     const memberId = item.responsable_id;
@@ -80,11 +74,23 @@ function calculateParticipationRows_(contributions) {
     }
     const value = Number(item.valor_calculado || 0);
     totals[memberId].assignedValue += value;
-    if (item.estado === 'Entregado') totals[memberId].effectiveValue += value;
+    if (isEffectiveContribution_(item)) totals[memberId].effectiveValue += value;
+  });
+
+  (reassignments || []).forEach(function (item) {
+    if (item.tipo !== REASSIGNMENT_TYPES.NONCOMPLIANCE) return;
+    const memberId = item.responsable_anterior_id;
+    if (!memberId) return;
+    if (!totals[memberId]) {
+      totals[memberId] = { memberId: memberId, assignedValue: 0, effectiveValue: 0 };
+    }
+    totals[memberId].assignedValue += Number(item.valor || 0);
   });
 
   const rows = Object.keys(totals).sort().map(function (memberId) {
     const row = totals[memberId];
+    row.assignedValue = roundTwoDecimals_(row.assignedValue);
+    row.effectiveValue = roundTwoDecimals_(row.effectiveValue);
     row.individualPercentage = row.assignedValue > 0
       ? roundTwoDecimals_(row.effectiveValue / row.assignedValue * 100)
       : null;
@@ -93,6 +99,10 @@ function calculateParticipationRows_(contributions) {
 
   allocateRelativePercentages_(rows);
   return rows;
+}
+
+function isEffectiveContribution_(contribution) {
+  return contribution && contribution.estado === 'Entregado';
 }
 
 function allocateRelativePercentages_(rows) {
@@ -122,7 +132,7 @@ function allocateRelativePercentages_(rows) {
   });
 }
 
-function getResultSetsForClient_(activities, members, liveContributions) {
+function getResultSetsForClient_(activities, members, liveContributions, reassignments) {
   const memberMap = members.reduce(function (map, member) {
     map[member.id] = member;
     return map;
@@ -148,6 +158,8 @@ function getResultSetsForClient_(activities, members, liveContributions) {
       });
     } else {
       rows = calculateParticipationRows_(liveContributions.filter(function (item) {
+        return item.actividad_id === activity.id;
+      }), (reassignments || []).filter(function (item) {
         return item.actividad_id === activity.id;
       }));
       finalResult = false;

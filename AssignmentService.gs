@@ -19,20 +19,73 @@ function reassignContribution_(payload) {
     if (!newResponsible || newResponsible.activo === false) throw new Error('Selecciona un integrante activo.');
     if (newResponsible.id === contribution.responsable_id) throw new Error('Selecciona un responsable diferente.');
 
+    const reassignmentType = cleanText_(payload.reassignmentType, 40);
+    if (reassignmentType !== REASSIGNMENT_TYPES.REORGANIZATION &&
+        reassignmentType !== REASSIGNMENT_TYPES.NONCOMPLIANCE) {
+      throw new Error('Selecciona si el cambio es una reorganización o un incumplimiento.');
+    }
+    const reason = cleanText_(payload.reason, 300);
+    if (reassignmentType === REASSIGNMENT_TYPES.NONCOMPLIANCE && reason.length < 10) {
+      throw new Error('Explica brevemente el incumplimiento de forma verificable.');
+    }
+
     const previousResponsibleId = contribution.responsable_id;
+    const previousAssignmentDate = contribution.fecha_asignacion;
+    const reassignment = {
+      id: nextId_('REA'),
+      contribucion_id: contribution.id,
+      actividad_id: contribution.actividad_id,
+      responsable_anterior_id: previousResponsibleId,
+      responsable_nuevo_id: newResponsible.id,
+      tipo: reassignmentType,
+      valor: Number(contribution.valor_calculado || 0),
+      motivo: reason,
+      fecha: new Date(),
+      creado_por: actor.id
+    };
+
     updateRecordById_('CONTRIBUCIONES', contribution.id, {
       responsable_id: newResponsible.id,
-      fecha_asignacion: new Date()
+      fecha_asignacion: reassignment.fecha
     });
-    appendHistory_(actor.id, 'REASIGNAR', 'CONTRIBUCION', contribution.id, {
+    try {
+      appendRecord_('REASIGNACIONES', reassignment);
+    } catch (error) {
+      updateRecordById_('CONTRIBUCIONES', contribution.id, {
+        responsable_id: previousResponsibleId,
+        fecha_asignacion: previousAssignmentDate
+      });
+      throw error;
+    }
+
+    const historyAction = reassignmentType === REASSIGNMENT_TYPES.NONCOMPLIANCE
+      ? 'REASIGNAR_INCUMPLIMIENTO'
+      : 'REASIGNAR_REORGANIZACION';
+    appendHistory_(actor.id, historyAction, 'CONTRIBUCION', contribution.id, {
+      reasignacionId: reassignment.id,
       responsableAnterior: previousResponsibleId,
+      responsableAnteriorNombre: (getRecordById_('INTEGRANTES', previousResponsibleId) || {}).nombre || previousResponsibleId,
       responsableNuevo: newResponsible.id,
-      motivo: cleanText_(payload.reason, 300)
+      responsableNuevoNombre: newResponsible.nombre,
+      tipo: reassignmentType,
+      valor: reassignment.valor,
+      motivo: reason
     });
     return getBootstrapData_(true);
   } finally {
     lock.releaseLock();
   }
+}
+
+function normalizeSplitValues_(originalValue, rawValues) {
+  const totalValue = Number(originalValue || 0);
+  const values = Array.isArray(rawValues) ? rawValues.map(Number) : [];
+  if (values.length !== 2 || values.some(function (value) { return !isFinite(value) || value <= 0; })) {
+    throw new Error('La división requiere dos valores brutos positivos.');
+  }
+  const rawTotal = values[0] + values[1];
+  const firstValue = roundTwoDecimals_(totalValue * values[0] / rawTotal);
+  return [firstValue, roundTwoDecimals_(totalValue - firstValue)];
 }
 
 function splitContribution_(payload) {
@@ -63,9 +116,9 @@ function splitContribution_(payload) {
     });
 
     const originalValue = Number(original.valor_calculado || 0);
-    const rawTotal = preparedParts.reduce(function (sum, part) { return sum + part.valuation.value; }, 0);
-    const firstValue = roundTwoDecimals_(originalValue * preparedParts[0].valuation.value / rawTotal);
-    const normalizedValues = [firstValue, roundTwoDecimals_(originalValue - firstValue)];
+    const normalizedValues = normalizeSplitValues_(originalValue, preparedParts.map(function (part) {
+      return part.valuation.value;
+    }));
     const evidence = getRecords_('EVIDENCIAS').filter(function (item) {
       return item.contribucion_id === original.id;
     });
@@ -113,6 +166,7 @@ function splitContribution_(payload) {
       nuevasContribuciones: newIds,
       valorOriginal: originalValue,
       valoresNuevos: normalizedValues,
+      responsablesNuevos: preparedParts.map(function (part) { return part.responsible.id; }),
       motivo: cleanText_(payload.reason, 300)
     });
     return getBootstrapData_(true);

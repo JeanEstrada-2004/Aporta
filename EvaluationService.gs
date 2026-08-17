@@ -11,7 +11,7 @@ function calculateContributionValue_(payload) {
   }
 
   const base = Number(rule.base);
-  const value = Math.min(10, base + scopeLevel + complexityLevel);
+  const value = calculateContributionPoints_(base, scopeLevel, complexityLevel);
 
   return {
     type: type,
@@ -22,6 +22,10 @@ function calculateContributionValue_(payload) {
     ruleVersion: String(rule.version),
     explanation: base + ' base + ' + scopeLevel + ' alcance + ' + complexityLevel + ' complejidad'
   };
+}
+
+function calculateContributionPoints_(base, scopeLevel, complexityLevel) {
+  return Math.min(10, Number(base) + Number(scopeLevel) + Number(complexityLevel));
 }
 
 function parseBoundedInteger_(value, minimum, maximum, label) {

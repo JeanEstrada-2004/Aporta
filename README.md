@@ -39,4 +39,18 @@ La aplicación permite:
 - calcular participación individual y relativa con desglose;
 - consultar responsabilidades, valores, evidencias e historial desde cada actividad.
 
-El cierre se revisa al abrir la aplicación y mediante un activador automático cada 15 minutos. Los resultados definitivos se conservan en la hoja `RESULTADOS` y los provisionales se calculan en tiempo real.
+El cierre se revisa cada vez que se abre la aplicación. Los resultados definitivos se conservan en la hoja `RESULTADOS` y los provisionales se calculan en tiempo real.
+
+## Cierre periódico opcional
+
+Para culminar actividades aunque nadie abra la aplicación, el propietario puede
+crear una vez un activador desde **Apps Script → Activadores → Añadir activador**:
+
+- función: `closeExpiredActivities`;
+- origen del evento: basado en tiempo;
+- tipo: temporizador por minutos;
+- intervalo recomendado: cada 15 minutos.
+
+Se configura manualmente para no solicitar a todos los integrantes el permiso
+amplio de administración de activadores. La función conserva el bloqueo, las
+versiones y la protección contra cierres duplicados.

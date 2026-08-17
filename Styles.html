@@ -151,6 +151,21 @@
     align-items: center;
   }
 
+  .topbar {
+    align-items: flex-start;
+  }
+
+  .page-heading {
+    min-width: 0;
+  }
+
+  .page-description {
+    max-width: 680px;
+    margin: 10px 0 0;
+    color: var(--muted);
+    line-height: 1.55;
+  }
+
   h1,
   h2,
   p {
@@ -212,6 +227,10 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .user-copy strong {
+    overflow-wrap: anywhere;
   }
 
   .user-copy small {
@@ -516,6 +535,12 @@
     margin-top: 38px;
   }
 
+  .section-controls {
+    justify-content: flex-end;
+    align-items: center;
+    min-height: 45px;
+  }
+
   .page-intro h2 {
     font-size: clamp(1.7rem, 4vw, 2.5rem);
   }
@@ -806,6 +831,15 @@
     font-size: 0.78rem;
   }
 
+  .timeline-detail {
+    display: block;
+    margin-top: 4px;
+    color: #4f5570;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+
   .evidence-links a,
   .evidence-links span {
     padding: 5px 8px;
@@ -942,6 +976,7 @@
 
   .team-table {
     width: 100%;
+    min-width: 620px;
     border-collapse: collapse;
   }
 
@@ -976,6 +1011,7 @@
 
   .member-cell small {
     color: var(--muted);
+    overflow-wrap: anywhere;
   }
 
   .small-avatar {
@@ -1180,6 +1216,24 @@
     color: var(--muted);
   }
 
+  .valuation-guide {
+    padding: 14px 16px;
+    color: var(--muted);
+    border-left: 4px solid var(--mint);
+    border-radius: 10px;
+    background: #f1faf6;
+    font-size: 0.8rem;
+    line-height: 1.5;
+  }
+
+  .valuation-guide strong {
+    color: var(--ink);
+  }
+
+  .valuation-guide p {
+    margin: 5px 0 0;
+  }
+
   .selection-summary {
     display: grid;
     gap: 5px;
@@ -1285,13 +1339,22 @@
     .topbar,
     .hero-panel,
     .section-toolbar,
-    .detail-hero {
+    .detail-hero,
+    .result-banner,
+    .form-actions {
       align-items: flex-start;
       flex-direction: column;
     }
 
     .user-chip {
+      width: 100%;
       min-width: 0;
+    }
+
+    .section-controls,
+    .compact-select,
+    .section-controls > button {
+      width: 100%;
     }
 
     .metric-grid {
@@ -1315,6 +1378,17 @@
       flex-direction: column;
     }
 
+    .form-actions {
+      width: 100%;
+      align-items: stretch;
+      gap: 10px;
+    }
+
+    .form-actions button,
+    .result-banner button {
+      width: 100%;
+    }
+
     .contribution-card {
       grid-template-columns: 1fr;
     }
@@ -1326,6 +1400,32 @@
 
     .hero-panel .primary-button {
       width: 100%;
+    }
+
+    .modal-backdrop {
+      padding: 10px;
+    }
+
+    .modal-card {
+      max-height: calc(100dvh - 20px);
+      padding: 20px;
+      border-radius: 16px;
+    }
+  }
+
+  @media (max-width: 380px) {
+    .result-percentages {
+      grid-template-columns: 1fr;
+    }
+
+    .main-content {
+      padding-right: 14px;
+      padding-left: 14px;
+    }
+
+    .sidebar {
+      padding-right: 14px;
+      padding-left: 14px;
     }
   }
 
