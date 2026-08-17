@@ -416,7 +416,7 @@
   function populateContributionOptions() {
     const rules = state.data.valuationRules || [];
     document.getElementById('contribution-type').innerHTML = rules.map(function (rule) {
-      return '<option value="' + escapeHtml(rule.type) + '">' + escapeHtml(rule.type) + ' · base ' + rule.base + '</option>';
+      return '<option value="' + escapeHtml(rule.type) + '">' + escapeHtml(rule.type) + '</option>';
     }).join('');
     document.getElementById('contribution-responsible').innerHTML = state.data.members.filter(function (member) {
       return member.active;
@@ -579,7 +579,7 @@
     const scope = Number(document.getElementById('contribution-scope').value || 0);
     const complexity = Number(document.getElementById('contribution-complexity').value || 0);
     const value = Math.min(10, Number(rule.base) + scope + complexity);
-    document.getElementById('valuation-preview').innerHTML = '<span>Valor automático</span><strong>' + value + ' puntos</strong><small>' + rule.base + ' base + ' + scope + ' alcance + ' + complexity + ' complejidad</small>';
+    document.getElementById('valuation-preview').innerHTML = '<span>Valor automático final</span><strong>' + value + ' puntos</strong><small>Calculado según el tipo de tarea, el alcance y la complejidad seleccionados.</small>';
   }
 
   function updateEvidenceFields() {
