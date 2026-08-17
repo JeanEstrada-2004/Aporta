@@ -4,8 +4,7 @@ function doGet() {
 
   return template.evaluate()
     .setTitle(APP_CONFIG.name + ' | Participación clara')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.SAMEORIGIN);
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
 function include(filename) {

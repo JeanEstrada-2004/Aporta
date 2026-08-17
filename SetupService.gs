@@ -1,3 +1,44 @@
+function configureAportaFromExistingProperties() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const properties = PropertiesService.getScriptProperties();
+    const spreadsheetId = properties.getProperty(APP_CONFIG.spreadsheetProperty);
+    const evidenceFolderId = properties.getProperty(APP_CONFIG.driveFolderProperty);
+    const reportFolderId = properties.getProperty(APP_CONFIG.reportFolderProperty);
+
+    if (!spreadsheetId || !evidenceFolderId || !reportFolderId) {
+      throw new Error('Faltan propiedades privadas de los recursos existentes de Aporta.');
+    }
+    if (!getConfiguredOwnerEmail_()) {
+      throw new Error('Falta la propiedad privada APORTA_OWNER_EMAIL.');
+    }
+
+    const preview = previewAportaResourceCompatibility(
+      spreadsheetId,
+      evidenceFolderId,
+      reportFolderId
+    );
+    if (!preview.compatible) {
+      throw new Error('La hoja existente tiene pestañas administradas incompatibles. No se realizo ningun cambio.');
+    }
+
+    initializeConfiguredResources_();
+    const result = {
+      configured: true,
+      reusedExistingResources: true,
+      spreadsheetUrl: preview.spreadsheet.url,
+      evidenceFolderUrl: preview.evidenceFolder.url,
+      reportFolderUrl: preview.reportFolder.url,
+      createdSheets: preview.missingManagedSheets
+    };
+    console.log(JSON.stringify({ preview: preview, result: result }));
+    return result;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function inspectAportaResources() {
   const spreadsheetCandidates = [];
   const spreadsheetFiles = DriveApp.getFilesByName('Aporta - Base de Datos');
@@ -27,7 +68,7 @@ function inspectAportaResources() {
   }
 
   const result = {
-    account: Session.getEffectiveUser().getEmail(),
+    configuredOwner: getConfiguredOwnerEmail_(),
     configured: isDatabaseConfigured_(),
     spreadsheets: spreadsheetCandidates,
     folders: folderCandidates
@@ -116,7 +157,7 @@ function configureAportaWithExistingResources(spreadsheetId, evidenceFolderId, r
       throw new Error('La hoja existente tiene pestañas administradas incompatibles. Revisa la vista previa antes de continuar.');
     }
 
-    const ownerEmail = normalizeEmail_(Session.getEffectiveUser().getEmail());
+    const ownerEmail = getSetupOwnerEmail_();
     if (!ownerEmail) {
       throw new Error('No se pudo identificar la cuenta que configura Aporta.');
     }
@@ -148,7 +189,7 @@ function initializeConfiguredResources_() {
   setConfigValue_('SCHEMA_VERSION', APP_CONFIG.schemaVersion, 'Version de la estructura de datos');
   setConfigValue_('TIMEZONE', APP_CONFIG.timezone, 'Zona horaria utilizada por el sistema');
 
-  const ownerEmail = normalizeEmail_(Session.getEffectiveUser().getEmail());
+  const ownerEmail = getSetupOwnerEmail_();
   if (!ownerEmail) {
     throw new Error('No se pudo identificar la cuenta que configura Aporta.');
   }
@@ -187,7 +228,6 @@ function initializeConfiguredResources_() {
       recursosReutilizados: true
     });
   }
-  ensureClosureTrigger_();
 }
 
 function inspectSheetCompatibility_(sheet) {
@@ -259,4 +299,15 @@ function cleanResourceId_(value) {
   const id = String(value || '').trim();
   if (!/^[A-Za-z0-9_-]{10,}$/.test(id)) throw new Error('ID de recurso no valido.');
   return id;
+}
+
+function getConfiguredOwnerEmail_() {
+  return normalizeEmail_(PropertiesService.getScriptProperties()
+    .getProperty(APP_CONFIG.ownerEmailProperty));
+}
+
+function getSetupOwnerEmail_() {
+  const configuredOwner = getConfiguredOwnerEmail_();
+  if (configuredOwner) return configuredOwner;
+  return normalizeEmail_(Session.getEffectiveUser().getEmail());
 }

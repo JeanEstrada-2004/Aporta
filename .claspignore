@@ -5,4 +5,5 @@
 **/.clasprc.json
 **/credentials.json
 **/node_modules/**
+tests/**
 **/*.md

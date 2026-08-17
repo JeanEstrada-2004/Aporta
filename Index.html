@@ -29,7 +29,11 @@
 
       <main class="main-content">
         <header class="topbar">
-          <div><p class="eyebrow">Gestión de la Innovación</p><h1 id="page-title">Tu aporte, claro y demostrable</h1></div>
+          <div class="page-heading">
+            <p class="eyebrow">Gestión de la Innovación</p>
+            <h1 id="page-title">Tu aporte, claro y demostrable</h1>
+            <p id="page-description" class="page-description">Consulta tus responsabilidades, próximos cierres y entregas registradas.</p>
+          </div>
           <div id="user-chip" class="user-chip is-loading" aria-live="polite">
             <span class="avatar">…</span>
             <span class="user-copy"><strong>Cargando</strong><small>Verificando acceso</small></span>
@@ -73,9 +77,8 @@
         </section>
 
         <section id="activities-view" class="app-view is-hidden" data-view="actividades">
-          <div class="section-toolbar">
-            <div class="page-intro"><p class="eyebrow">Trabajo del ciclo</p><h2>Actividades del equipo</h2><p>Revisa entregables, responsables y evidencias desde un solo lugar.</p></div>
-            <button class="primary-button admin-only is-hidden" type="button" data-new-activity>Nueva actividad</button>
+          <div class="section-toolbar section-controls admin-only is-hidden">
+            <button class="primary-button" type="button" data-new-activity>Nueva actividad</button>
           </div>
           <div id="activities-grid" class="activity-grid"></div>
         </section>
@@ -86,16 +89,14 @@
         </section>
 
         <section id="results-view" class="app-view is-hidden" data-view="resultados">
-          <div class="section-toolbar">
-            <div class="page-intro"><p class="eyebrow">Matriz de participación</p><h2>Resultados explicables</h2><p>Compara el cumplimiento individual con la proporción del trabajo producido.</p></div>
+          <div class="section-toolbar section-controls">
             <label class="compact-select">Actividad<select id="results-activity-select"></select></label>
           </div>
           <div id="results-content" class="results-content"></div>
         </section>
 
         <section id="team-view" class="app-view is-hidden" data-view="equipo">
-          <div class="section-toolbar">
-            <div class="page-intro"><p class="eyebrow">Administración</p><h2>Equipo</h2><p>Los integrantes desactivados conservan todo su historial.</p></div>
+          <div class="section-toolbar section-controls">
             <button id="new-member-button" class="primary-button" type="button">Agregar integrante</button>
           </div>
           <div class="panel table-panel"><div class="table-wrap"><table class="team-table"><thead><tr><th>Integrante</th><th>Rol</th><th>Estado</th><th></th></tr></thead><tbody id="members-table-body"></tbody></table></div></div>
@@ -120,7 +121,7 @@
         <div class="modal-heading"><div><p class="eyebrow">Equipo</p><h2 id="member-modal-title">Agregar integrante</h2></div><button class="icon-button" type="button" data-close-modal aria-label="Cerrar">×</button></div>
         <form id="member-form">
           <input name="id" type="hidden">
-          <label>Nombre<input name="name" maxlength="100" required placeholder="Nombre del integrante"></label>
+          <label>Nombre visible en Aporta<input name="name" maxlength="100" required placeholder="Nombre completo del integrante"></label>
           <label>Correo de Google<input name="email" type="email" maxlength="160" required placeholder="persona@gmail.com"></label>
           <label>Rol<select name="role"><option>Integrante</option><option>Administrador</option></select></label>
           <label class="check-label"><input name="active" type="checkbox" checked> Integrante activo</label>
@@ -158,6 +159,10 @@
             <label>Detalle del alcance<input name="scopeDetail" maxlength="180" required placeholder="Ej. 3 variables y 4 gráficos"></label>
             <label>Criterio de complejidad<input name="complexityDetail" maxlength="180" required placeholder="Ej. Requiere interpretar relaciones"></label>
           </div>
+          <div class="valuation-guide">
+            <strong>Guía rápida</strong>
+            <p><b>Alcance</b> mide la cantidad o amplitud del trabajo. <b>Complejidad</b> mide el nivel de estructura, análisis o técnica requerido.</p>
+          </div>
           <div id="valuation-preview" class="valuation-box" aria-live="polite"></div>
           <div class="form-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button><button class="primary-button" id="save-contribution" type="submit">Asignar contribución</button></div>
         </form>
@@ -186,6 +191,7 @@
           <input name="contributionId" type="hidden">
           <div id="observation-summary" class="selection-summary"></div>
           <label>Problema verificable<textarea name="reason" minlength="10" maxlength="600" rows="5" required placeholder="Indica qué evidencia falta, no corresponde o no puede verificarse"></textarea></label>
+          <p class="form-note">Reporta hechos comprobables, como un archivo incorrecto, enlace inaccesible o parte requerida ausente. No corresponde observar una entrega por gustos personales o diferencias subjetivas de calidad.</p>
           <div class="form-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button><button class="primary-button" id="save-observation" type="submit">Enviar reporte</button></div>
         </form>
       </div>
@@ -211,7 +217,9 @@
           <input name="contributionId" type="hidden">
           <div id="reassign-summary" class="selection-summary"></div>
           <label>Nuevo responsable<select id="reassign-responsible" name="responsibleId" required></select></label>
-          <label>Motivo opcional<textarea name="reason" maxlength="300" rows="3"></textarea></label>
+          <label>Tipo de cambio<select id="reassignment-type" name="reassignmentType" required><option value="Reorganización">Reorganización acordada</option><option value="Incumplimiento">Traspaso por incumplimiento</option></select></label>
+          <label>Explicación<textarea id="reassignment-reason" name="reason" maxlength="300" rows="3" placeholder="Describe brevemente por qué se reorganiza el trabajo"></textarea></label>
+          <p id="reassignment-help" class="form-note">La reorganización no afecta al responsable anterior.</p>
           <div class="form-actions"><button class="secondary-button" type="button" data-close-modal>Cancelar</button><button class="primary-button" id="save-reassignment" type="submit">Reasignar</button></div>
         </form>
       </div>
